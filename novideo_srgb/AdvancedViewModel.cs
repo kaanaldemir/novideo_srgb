@@ -252,7 +252,15 @@ namespace novideo_srgb
 
         public bool ChangedDither { get; set; }
 
-        public string ProfileNamePath => Path.GetFileName(ProfilePath);
+        public string ProfileNamePath
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(ProfilePath))
+                    return "";
+                return Path.GetFileName(ProfilePath);
+            }
+        }
 
         private void OnPropertyChanged([CallerMemberName] string name = null)
         {

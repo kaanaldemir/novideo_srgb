@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Forms;
 using Application = System.Windows.Application;
 using MessageBox = System.Windows.Forms.MessageBox;
+using System.Reflection;
 
 namespace novideo_srgb
 {
@@ -114,11 +115,20 @@ namespace novideo_srgb
             _contextMenu.Popup += delegate { UpdateContextMenu(); };
 
             notifyIcon.ContextMenu = _contextMenu;
-
-            notifyIcon.MouseMove += (sender, args) => 
+            
+            // Add mouse click handler - single click will open the menu
+            notifyIcon.MouseClick += (sender, args) => 
             {
-                UpdateContextMenu();
-                _contextMenu.Show(notifyIcon, new System.Drawing.Point(args.X, args.Y));
+                // Only respond to left clicks, as right clicks show the context menu automatically
+                if (args.Button == MouseButtons.Left)
+                {
+                    UpdateContextMenu();
+                    // No need to explicitly call Show - just trigger the popup through the tray icon
+                    MethodInfo method = typeof(NotifyIcon).GetMethod("ShowContextMenu", 
+                        BindingFlags.Instance | BindingFlags.NonPublic);
+                    if (method != null)
+                        method.Invoke(notifyIcon, null);
+                }
             };
 
             Closed += delegate { notifyIcon.Dispose(); };

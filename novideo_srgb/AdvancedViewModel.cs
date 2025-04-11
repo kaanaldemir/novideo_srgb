@@ -21,6 +21,7 @@ namespace novideo_srgb
         private double _customGamma;
         private double _customPercentage;
         private bool _disableOptimization;
+        private string _profileName;
 
         private int _ditherState;
         private int _ditherMode;
@@ -43,10 +44,15 @@ namespace novideo_srgb
             _customGamma = monitor.CustomGamma;
             _customPercentage = monitor.CustomPercentage;
             _disableOptimization = monitor.DisableOptimization;
+            _profileName = monitor.CurrentProfile.Name;
 
-            _ditherBits = dither.bits;
-            _ditherMode = dither.mode;
-            _ditherState = dither.state;
+            _ditherBits = monitor.CurrentProfile.DitherBits;
+            _ditherMode = monitor.CurrentProfile.DitherMode;
+            _ditherState = monitor.CurrentProfile.DitherState;
+            
+            dither.bits = _ditherBits;
+            dither.mode = _ditherMode;
+            dither.state = _ditherState;
         }
 
         public void ApplyChanges()
@@ -67,6 +73,11 @@ namespace novideo_srgb
             _monitor.CustomPercentage = _customPercentage;
             ChangedCalibration |= _monitor.DisableOptimization != _disableOptimization;
             _monitor.DisableOptimization = _disableOptimization;
+            
+            if (_monitor.CurrentProfile.Name != _profileName)
+            {
+                _monitor.CurrentProfile.Name = _profileName;
+            }
         }
 
         public ChromaticityCoordinates Coords => _monitor.Edid.DisplayParameters.ChromaticityCoordinates;
@@ -104,12 +115,21 @@ namespace novideo_srgb
                 if (value == _profilePath) return;
                 _profilePath = value;
                 OnPropertyChanged();
-                OnPropertyChanged(nameof(ProfileName));
+                OnPropertyChanged(nameof(ProfileNamePath));
             }
             get => _profilePath;
         }
 
-        public string ProfileName => Path.GetFileName(ProfilePath);
+        public string ProfileName
+        {
+            get => _profileName;
+            set
+            {
+                if (value == _profileName) return;
+                _profileName = value;
+                OnPropertyChanged();
+            }
+        }
 
         public bool CalibrateGamma
         {
@@ -231,6 +251,8 @@ namespace novideo_srgb
         public bool CustomDither => DitherState == 1;
 
         public bool ChangedDither { get; set; }
+
+        public string ProfileNamePath => Path.GetFileName(ProfilePath);
 
         private void OnPropertyChanged([CallerMemberName] string name = null)
         {

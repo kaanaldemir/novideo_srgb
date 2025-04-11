@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Windows;
+using System.Collections.Generic;
 using EDIDParser;
 using EDIDParser.Descriptors;
 using EDIDParser.Enums;
@@ -13,6 +14,48 @@ using NvAPIWrapper.Native.Display;
 
 namespace novideo_srgb
 {
+    public class Profile
+    {
+        public string Name { get; set; }
+        public bool UseIcc { get; set; }
+        public string ProfilePath { get; set; }
+        public bool CalibrateGamma { get; set; }
+        public int SelectedGamma { get; set; }
+        public double CustomGamma { get; set; }
+        public double CustomPercentage { get; set; }
+        public bool DisableOptimization { get; set; }
+        public int Target { get; set; }
+        public int DitherState { get; set; }
+        public int DitherMode { get; set; }
+        public int DitherBits { get; set; }
+        
+        public Profile(string name)
+        {
+            Name = name;
+            ProfilePath = "";
+            CustomGamma = 2.2;
+            CustomPercentage = 100;
+        }
+        
+        public Profile Clone()
+        {
+            return new Profile(Name)
+            {
+                UseIcc = UseIcc,
+                ProfilePath = ProfilePath,
+                CalibrateGamma = CalibrateGamma,
+                SelectedGamma = SelectedGamma,
+                CustomGamma = CustomGamma,
+                CustomPercentage = CustomPercentage,
+                DisableOptimization = DisableOptimization,
+                Target = Target,
+                DitherState = DitherState,
+                DitherMode = DitherMode,
+                DitherBits = DitherBits
+            };
+        }
+    }
+
     public class MonitorData : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler PropertyChanged;
@@ -23,6 +66,20 @@ namespace novideo_srgb
         private Novideo.DitherControl _dither;
 
         private MainViewModel _viewModel;
+        
+        public List<Profile> Profiles { get; private set; }
+        private int _selectedProfileIndex;
+        public int SelectedProfileIndex
+        {
+            get => _selectedProfileIndex;
+            set
+            {
+                if (_selectedProfileIndex == value) return;
+                _selectedProfileIndex = value;
+                OnPropertyChanged();
+                ReapplyClamp();
+            }
+        }
 
         public MonitorData(MainViewModel viewModel, int number, Display display, string path, bool hdrActive, bool clampSdr)
         {
@@ -69,25 +126,45 @@ namespace novideo_srgb
 
             _dither = Novideo.GetDitherControl(_output);
             _clamped = Novideo.IsColorSpaceConversionActive(_output);
-
-            ProfilePath = "";
-            CustomGamma = 2.2;
-            CustomPercentage = 100;
+            
+            // Initialize profiles
+            Profiles = new List<Profile>
+            {
+                new Profile("Profile 1"),
+                new Profile("Profile 2"),
+                new Profile("Profile 3")
+            };
+            
+            _selectedProfileIndex = 0;
         }
 
         public MonitorData(MainViewModel viewModel, int number, Display display, string path, bool hdrActive, bool clampSdr, bool useIcc, string profilePath,
-            bool calibrateGamma,
-            int selectedGamma, double customGamma, double customPercentage, int target, bool disableOptimization) :
+            bool calibrateGamma, int selectedGamma, double customGamma, double customPercentage, int target, bool disableOptimization, 
+            List<Profile> profiles = null, int selectedProfileIndex = 0) :
             this(viewModel, number, display, path, hdrActive, clampSdr)
         {
-            UseIcc = useIcc;
-            ProfilePath = profilePath;
-            CalibrateGamma = calibrateGamma;
-            SelectedGamma = selectedGamma;
-            CustomGamma = customGamma;
-            CustomPercentage = customPercentage;
-            Target = target;
-            DisableOptimization = disableOptimization;
+            if (profiles != null)
+            {
+                Profiles = profiles;
+                _selectedProfileIndex = selectedProfileIndex;
+            }
+            else
+            {
+                // Apply to first profile if no profiles are provided
+                CurrentProfile.UseIcc = useIcc;
+                CurrentProfile.ProfilePath = profilePath;
+                CurrentProfile.CalibrateGamma = calibrateGamma;
+                CurrentProfile.SelectedGamma = selectedGamma;
+                CurrentProfile.CustomGamma = customGamma;
+                CurrentProfile.CustomPercentage = customPercentage;
+                CurrentProfile.Target = target;
+                CurrentProfile.DisableOptimization = disableOptimization;
+                
+                // Apply dither settings
+                CurrentProfile.DitherState = _dither.state;
+                CurrentProfile.DitherMode = _dither.mode;
+                CurrentProfile.DitherBits = _dither.bits;
+            }
         }
 
         public int Number { get; }
@@ -205,31 +282,117 @@ namespace novideo_srgb
 
         public bool UseEdid
         {
-            set => UseIcc = !value;
-            get => !UseIcc;
+            get => !CurrentProfile.UseIcc;
+            set
+            {
+                CurrentProfile.UseIcc = !value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(UseIcc));
+            }
         }
 
-        public bool UseIcc { set; get; }
+        public bool UseIcc 
+        {
+            get => CurrentProfile.UseIcc;
+            set
+            {
+                CurrentProfile.UseIcc = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(UseEdid));
+            }
+        }
 
-        public string ProfilePath { set; get; }
+        public string ProfilePath
+        {
+            get => CurrentProfile.ProfilePath;
+            set
+            {
+                CurrentProfile.ProfilePath = value;
+                OnPropertyChanged();
+            }
+        }
 
-        public bool CalibrateGamma { set; get; }
+        public bool CalibrateGamma
+        {
+            get => CurrentProfile.CalibrateGamma;
+            set
+            {
+                CurrentProfile.CalibrateGamma = value;
+                OnPropertyChanged();
+            }
+        }
 
-        public int SelectedGamma { set; get; }
+        public int SelectedGamma
+        {
+            get => CurrentProfile.SelectedGamma;
+            set
+            {
+                CurrentProfile.SelectedGamma = value;
+                OnPropertyChanged();
+            }
+        }
 
-        public double CustomGamma { set; get; }
+        public double CustomGamma
+        {
+            get => CurrentProfile.CustomGamma;
+            set
+            {
+                CurrentProfile.CustomGamma = value;
+                OnPropertyChanged();
+            }
+        }
 
-        public double CustomPercentage { set; get; }
+        public double CustomPercentage
+        {
+            get => CurrentProfile.CustomPercentage;
+            set
+            {
+                CurrentProfile.CustomPercentage = value;
+                OnPropertyChanged();
+            }
+        }
 
-        public bool DisableOptimization { set; get; }
+        public int Target
+        {
+            get => CurrentProfile.Target;
+            set
+            {
+                CurrentProfile.Target = value;
+                OnPropertyChanged();
+            }
+        }
 
-        public int Target { set; get; }
+        public bool DisableOptimization
+        {
+            get => CurrentProfile.DisableOptimization;
+            set
+            {
+                CurrentProfile.DisableOptimization = value;
+                OnPropertyChanged();
+            }
+        }
 
         public Colorimetry.ColorSpace EdidColorSpace { get; }
 
         private Colorimetry.ColorSpace TargetColorSpace => Colorimetry.ColorSpaces[Target];
 
-        public Novideo.DitherControl DitherControl => _dither;
+        public Novideo.DitherControl DitherControl
+        {
+            get
+            {
+                // Create a DitherControl from the current profile
+                var control = new Novideo.DitherControl
+                {
+                    state = CurrentProfile.DitherState,
+                    bits = CurrentProfile.DitherBits,
+                    mode = CurrentProfile.DitherMode,
+                    bitsCaps = _dither.bitsCaps,
+                    modeCaps = _dither.modeCaps
+                };
+                
+                return control;
+            }
+        }
 
         public string DitherString
         {
@@ -264,7 +427,14 @@ namespace novideo_srgb
             {
                 Novideo.SetDitherControl(_output, state, bits, mode);
                 _dither = Novideo.GetDitherControl(_output);
+                
+                // Save settings to current profile
+                CurrentProfile.DitherState = state;
+                CurrentProfile.DitherBits = bits;
+                CurrentProfile.DitherMode = mode;
+                
                 OnPropertyChanged(nameof(DitherString));
+                _viewModel.SaveConfig();
             }
             catch (Exception e)
             {
@@ -275,6 +445,26 @@ namespace novideo_srgb
         private void OnPropertyChanged([CallerMemberName] string name = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        }
+
+        public Profile CurrentProfile => Profiles[_selectedProfileIndex];
+
+        public void SetProfileName(int profileIndex, string name)
+        {
+            if (profileIndex >= 0 && profileIndex < Profiles.Count)
+            {
+                Profiles[profileIndex].Name = name;
+                OnPropertyChanged("Profiles");
+            }
+        }
+
+        public string GetProfileName(int profileIndex)
+        {
+            if (profileIndex >= 0 && profileIndex < Profiles.Count)
+            {
+                return Profiles[profileIndex].Name;
+            }
+            return "Unknown";
         }
     }
 }

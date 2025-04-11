@@ -115,6 +115,12 @@ namespace novideo_srgb
 
             notifyIcon.ContextMenu = _contextMenu;
 
+            notifyIcon.MouseMove += (sender, args) => 
+            {
+                UpdateContextMenu();
+                _contextMenu.Show(notifyIcon, new System.Drawing.Point(args.X, args.Y));
+            };
+
             Closed += delegate { notifyIcon.Dispose(); };
         }
 
@@ -124,12 +130,32 @@ namespace novideo_srgb
 
             foreach (var monitor in _viewModel.Monitors)
             {
-                var item = new MenuItem();
-                _contextMenu.MenuItems.Add(item);
-                item.Text = monitor.Name;
-                item.Checked = monitor.Clamped;
-                item.Enabled = monitor.CanClamp;
-                item.Click += (sender, args) => monitor.Clamped = !monitor.Clamped;
+                var monitorMenuItem = new MenuItem();
+                _contextMenu.MenuItems.Add(monitorMenuItem);
+                monitorMenuItem.Text = monitor.Name;
+                
+                for (int i = 0; i < monitor.Profiles.Count; i++)
+                {
+                    var profile = monitor.Profiles[i];
+                    var profileItem = new MenuItem();
+                    monitorMenuItem.MenuItems.Add(profileItem);
+                    profileItem.Text = profile.Name;
+                    profileItem.Checked = monitor.Clamped && monitor.SelectedProfileIndex == i;
+                    profileItem.Enabled = monitor.CanClamp;
+                    
+                    int capturedIndex = i;
+                    profileItem.Click += (sender, args) => 
+                    {
+                        monitor.SelectedProfileIndex = capturedIndex;
+                        monitor.Clamped = true;
+                    };
+                }
+                
+                var offItem = new MenuItem();
+                monitorMenuItem.MenuItems.Add(offItem);
+                offItem.Text = "Off";
+                offItem.Checked = !monitor.Clamped;
+                offItem.Click += (sender, args) => monitor.Clamped = false;
             }
 
             _contextMenu.MenuItems.Add("-");

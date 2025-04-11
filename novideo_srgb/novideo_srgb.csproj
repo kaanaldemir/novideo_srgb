@@ -132,6 +132,7 @@
     <Compile Include="ICCMatrixProfile.cs" />
     <Compile Include="MonitorData.cs" />
     <Compile Include="Novideo.cs" />
+    <Compile Include="ProfileConverters.cs" />
     <Compile Include="AdvancedWindow.xaml.cs">
       <DependentUpon>AdvancedWindow.xaml</DependentUpon>
     </Compile>

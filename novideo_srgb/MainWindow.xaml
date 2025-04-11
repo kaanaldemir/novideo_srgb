@@ -10,6 +10,11 @@
     <Window.DataContext>
         <local:MainViewModel />
     </Window.DataContext>
+    <Window.Resources>
+        <local:ProfileIndexToBoldConverter x:Key="ProfileIndexToBoldConverter" />
+        <local:ProfileIndexToColorConverter x:Key="ProfileIndexToColorConverter" />
+        <local:ProfileParameterConverter x:Key="ProfileParameterConverter" />
+    </Window.Resources>
     <DockPanel Margin="6,0,6,6">
         <Grid DockPanel.Dock="Bottom">
             <Button DockPanel.Dock="Bottom" Content="About" Width="75" HorizontalAlignment="Left"
@@ -41,6 +46,53 @@
                 <DataGridTextColumn Header="#" Binding="{Binding Number}" IsReadOnly="True" />
                 <DataGridTextColumn Header="Name" Binding="{Binding Name}" IsReadOnly="True" />
                 <DataGridTextColumn Header="Dithering" Width="*" Binding="{Binding DitherString}" IsReadOnly="True" />
+                <DataGridTemplateColumn Header="Profiles">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Button Width="30" Height="30" Margin="1" 
+                                        Content="1" 
+                                        ToolTip="{Binding Profiles[0].Name}"
+                                        FontWeight="{Binding SelectedProfileIndex, Converter={StaticResource ProfileIndexToBoldConverter}, ConverterParameter=0}"
+                                        Background="{Binding SelectedProfileIndex, Converter={StaticResource ProfileIndexToColorConverter}, ConverterParameter=0}"
+                                        Command="{Binding DataContext.SelectProfileCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}">
+                                    <Button.CommandParameter>
+                                        <MultiBinding Converter="{StaticResource ProfileParameterConverter}">
+                                            <Binding Source="0" />
+                                            <Binding Path="." />
+                                        </MultiBinding>
+                                    </Button.CommandParameter>
+                                </Button>
+                                <Button Width="30" Height="30" Margin="1" 
+                                        Content="2" 
+                                        ToolTip="{Binding Profiles[1].Name}"
+                                        FontWeight="{Binding SelectedProfileIndex, Converter={StaticResource ProfileIndexToBoldConverter}, ConverterParameter=1}"
+                                        Background="{Binding SelectedProfileIndex, Converter={StaticResource ProfileIndexToColorConverter}, ConverterParameter=1}"
+                                        Command="{Binding DataContext.SelectProfileCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}">
+                                    <Button.CommandParameter>
+                                        <MultiBinding Converter="{StaticResource ProfileParameterConverter}">
+                                            <Binding Source="1" />
+                                            <Binding Path="." />
+                                        </MultiBinding>
+                                    </Button.CommandParameter>
+                                </Button>
+                                <Button Width="30" Height="30" Margin="1" 
+                                        Content="3" 
+                                        ToolTip="{Binding Profiles[2].Name}"
+                                        FontWeight="{Binding SelectedProfileIndex, Converter={StaticResource ProfileIndexToBoldConverter}, ConverterParameter=2}"
+                                        Background="{Binding SelectedProfileIndex, Converter={StaticResource ProfileIndexToColorConverter}, ConverterParameter=2}"
+                                        Command="{Binding DataContext.SelectProfileCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}">
+                                    <Button.CommandParameter>
+                                        <MultiBinding Converter="{StaticResource ProfileParameterConverter}">
+                                            <Binding Source="2" />
+                                            <Binding Path="." />
+                                        </MultiBinding>
+                                    </Button.CommandParameter>
+                                </Button>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
                 <DataGridTemplateColumn>
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>

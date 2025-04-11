@@ -1,3 +1,40 @@
+# novideo_srgb with Profile System and Global Hotkey
+
+## [Download latest release of the fork](https://github.com/kaanaldemir/novideo_srgb/releases/latest/download/release.zip)
+
+This fork of novideo_srgb adds two quality-of-life features:
+- **Profile System**: Save and switch between three different configurations per monitor
+- **Global Hotkey**: Toggle all monitors' clamping with a custom key combination even in fullscreen applications
+
+![Screenshot](Screenshot.jpg)
+
+## New Features
+
+### Profile System
+Click on one of the profile buttons (1, 2, or 3) next to the "Advanced" button to switch between different configurations. The active profile is highlighted in blue with bold text. Profile names are visible when hovering over buttons.
+
+### Global Hotkey
+To configure the hotkey:
+1. Click the "Hotkey" button next to the "About" button
+2. Press the key you want to use (e.g., F10) and select modifier keys (Ctrl, Alt, Shift)
+3. Click OK to save
+
+When you press the configured hotkey combination, all monitors will be toggled between clamped and unclamped states.
+
+### Tray Icon Enhancements
+When using the tray icon:
+- Left-click to show the context menu with monitor profiles
+- Each monitor has up to 3 profiles and an "Off" option
+- Right-click for the standard menu with Reapply and Exit options
+
+## Credits
+- Original novideo_srgb project by [ledoge](https://github.com/ledoge)
+- Profile system and hotkey features added by [kaanaldemir](https://github.com/kaanaldemir)
+
+---
+
+# Original README by ledoge
+
 ## [Download latest release](https://github.com/ledoge/novideo_srgb/releases/latest/download/release.zip)
 
 # About

@@ -22,6 +22,9 @@ namespace novideo_srgb
         private RegistryKey _startupKey;
         private string _startupValue;
 
+        public uint HotkeyModifiers { get; set; }
+        public uint HotkeyKey { get; set; }
+
         public MainViewModel()
         {
             Monitors = new ObservableCollection<MonitorData>();
@@ -70,10 +73,20 @@ namespace novideo_srgb
         private void UpdateMonitors()
         {
             Monitors.Clear();
-            List<XElement> config = null;
+            XElement configRoot = null;
             if (File.Exists(_configPath))
             {
-                config = XElement.Load(_configPath).Descendants("monitor").ToList();
+                configRoot = XElement.Load(_configPath);
+                
+                // Load hotkey settings if available
+                var hotkeyModifiersAttr = configRoot.Attribute("hotkey_modifiers");
+                var hotkeyKeyAttr = configRoot.Attribute("hotkey_key");
+                
+                if (hotkeyModifiersAttr != null && hotkeyKeyAttr != null)
+                {
+                    HotkeyModifiers = (uint)hotkeyModifiersAttr;
+                    HotkeyKey = (uint)hotkeyKeyAttr;
+                }
             }
 
             var hdrPaths = DisplayConfigManager.GetHdrDisplayPaths();
@@ -86,7 +99,7 @@ namespace novideo_srgb
 
                 var hdrActive = hdrPaths.Contains(path);
 
-                var settings = config?.FirstOrDefault(x => (string)x.Attribute("path") == path);
+                var settings = configRoot?.Descendants("monitor").FirstOrDefault(x => (string)x.Attribute("path") == path);
                 MonitorData monitor;
                 if (settings != null)
                 {
@@ -167,6 +180,8 @@ namespace novideo_srgb
             try
             {
                 var xElem = new XElement("monitors",
+                    new XAttribute("hotkey_modifiers", HotkeyModifiers),
+                    new XAttribute("hotkey_key", HotkeyKey),
                     Monitors.Select(x =>
                     {
                         var monitorElement = new XElement("monitor", 

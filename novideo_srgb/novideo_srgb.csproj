@@ -126,13 +126,13 @@
       <SubType>Code</SubType>
     </Compile>
     <Page Include="AdvancedWindow.xaml" />
-  </ItemGroup>
-  <ItemGroup>
     <Compile Include="Matrix.cs" />
     <Compile Include="ICCMatrixProfile.cs" />
     <Compile Include="MonitorData.cs" />
     <Compile Include="Novideo.cs" />
     <Compile Include="ProfileConverters.cs" />
+    <Compile Include="HotkeyWindow.xaml.cs">
+    </Compile>
     <Compile Include="AdvancedWindow.xaml.cs">
       <DependentUpon>AdvancedWindow.xaml</DependentUpon>
     </Compile>

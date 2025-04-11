@@ -17,9 +17,16 @@
     </Window.Resources>
     <DockPanel Margin="6,0,6,6">
         <Grid DockPanel.Dock="Bottom">
-            <Button DockPanel.Dock="Bottom" Content="About" Width="75" HorizontalAlignment="Left"
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" Content="About" Width="75" HorizontalAlignment="Left"
                     Click="AboutButton_Click" />
-            <WrapPanel DockPanel.Dock="Bottom" HorizontalAlignment="Right">
+            <Button Grid.Column="1" Content="Hotkey" Width="75" HorizontalAlignment="Left"
+                    Click="HotkeyButton_Click" Margin="6,0,0,0" />
+            <WrapPanel Grid.Column="2" DockPanel.Dock="Bottom" HorizontalAlignment="Right">
                 <CheckBox Content="Run at startup" IsThreeState="true" IsChecked="{Binding RunAtStartup}"
                           VerticalAlignment="Center" Margin="0,0,6,0">
                 </CheckBox>

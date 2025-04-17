@@ -265,6 +265,9 @@ namespace novideo_srgb
         {
             try
             {
+                // Mute list rebuilds triggered by our own LUT write
+                SystemEvents.DisplaySettingsChanged -= _viewModel.OnDisplaySettingsChanged;
+
                 var clamped = CanClamp && ClampSdr;
                 UpdateClamp(clamped);
                 _clamped = clamped;
@@ -273,6 +276,11 @@ namespace novideo_srgb
             catch (Exception e)
             {
                 HandleClampException(e);
+            }
+            finally
+            {
+                // Re‑enable for real display‑change events
+                SystemEvents.DisplaySettingsChanged += _viewModel.OnDisplaySettingsChanged;
             }
         }
 

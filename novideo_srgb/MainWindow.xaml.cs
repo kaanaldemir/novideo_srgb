@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.Linq;
 using System.Windows;
 using System.Windows.Forms;
+using System.Runtime.InteropServices;
+using System.Windows.Interop;
 using Application = System.Windows.Application;
 using MessageBox = System.Windows.Forms.MessageBox;
 
@@ -11,6 +13,28 @@ namespace novideo_srgb
 {
     public partial class MainWindow
     {
+        // Hotkey constants and P/Invoke declarations
+        private const int WM_HOTKEY = 0x0312;
+        private const int HOTKEY_ID = 9000;
+        
+        [DllImport("user32.dll")]
+        private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+        
+        [DllImport("user32.dll")]
+        private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+        
+        // Modifiers
+        private const uint MOD_ALT = 0x0001;
+        private const uint MOD_CONTROL = 0x0002;
+        private const uint MOD_SHIFT = 0x0004;
+        private const uint MOD_WIN = 0x0008;
+        
+        // Default hotkey is Ctrl+Alt+S
+        private uint _hotkeyModifiers = MOD_CONTROL | MOD_ALT;
+        private uint _hotkeyKey = (uint)Keys.S;
+        private bool _hotkeyRegistered = false;
+        private HwndSource _source;
+
         private readonly MainViewModel _viewModel;
 
         private ContextMenu _contextMenu;
@@ -39,6 +63,69 @@ namespace novideo_srgb
             }
 
             InitializeTrayIcon();
+        }
+
+        // Override WndProc to capture hotkey messages
+        protected override void OnSourceInitialized(EventArgs e)
+        {
+            base.OnSourceInitialized(e);
+            _source = PresentationSource.FromVisual(this) as HwndSource;
+            _source?.AddHook(WndProc);
+            
+            // Register hotkey when the window is initialized
+            RegisterGlobalHotkey();
+        }
+        
+        private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            // Handle WM_HOTKEY message
+            if (msg == WM_HOTKEY && wParam.ToInt32() == HOTKEY_ID)
+            {
+                ToggleAllMonitorClamping();
+                handled = true;
+            }
+            return IntPtr.Zero;
+        }
+        
+        private void ToggleAllMonitorClamping()
+        {
+            bool anyEnabled = _viewModel.Monitors.Any(m => m.Clamped);
+            
+            foreach (var monitor in _viewModel.Monitors)
+            {
+                // If any are enabled, disable all; otherwise enable all
+                monitor.Clamped = !anyEnabled;
+            }
+        }
+        
+        // Register the hotkey
+        private bool RegisterGlobalHotkey()
+        {
+            if (_hotkeyRegistered)
+            {
+                UnregisterGlobalHotkey();
+            }
+            
+            var hwnd = new WindowInteropHelper(this).Handle;
+            _hotkeyRegistered = RegisterHotKey(hwnd, HOTKEY_ID, _hotkeyModifiers, _hotkeyKey);
+            
+            return _hotkeyRegistered;
+        }
+        
+        // Unregister the hotkey
+        private void UnregisterGlobalHotkey()
+        {
+            if (!_hotkeyRegistered) return;
+            
+            var hwnd = new WindowInteropHelper(this).Handle;
+            UnregisterHotKey(hwnd, HOTKEY_ID);
+            _hotkeyRegistered = false;
+        }
+        
+        protected override void OnClosed(EventArgs e)
+        {
+            UnregisterGlobalHotkey();
+            base.OnClosed(e);
         }
 
         protected override void OnStateChanged(EventArgs e)

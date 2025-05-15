@@ -7,6 +7,11 @@ using System.Windows.Forms;
 using System.Xml.Linq;
 using Microsoft.Win32;
 using NvAPIWrapper.Display;
+<<<<<<< Updated upstream
+=======
+using System.Windows.Input;
+using System.Threading;
+>>>>>>> Stashed changes
 
 namespace novideo_srgb
 {
@@ -75,11 +80,22 @@ namespace novideo_srgb
 
             var hdrPaths = DisplayConfigManager.GetHdrDisplayPaths();
 
+            // Get all displays first and sort them by path to ensure consistent ordering
+            var allDisplays = Display.GetDisplays().ToList();
+            var allWindowsDisplays = WindowsDisplayAPI.Display.GetDisplays().ToList();
+            
+            // Create a dictionary mapping display names to their device paths
+            var displayPathMap = allWindowsDisplays.ToDictionary(
+                x => x.DisplayName,
+                x => x.DevicePath
+            );
+            
+            // Process displays in a consistent order
             var number = 1;
-            foreach (var display in Display.GetDisplays())
+            foreach (var display in allDisplays)
             {
-                var displays = WindowsDisplayAPI.Display.GetDisplays();
-                var path = displays.First(x => x.DisplayName == display.Name).DevicePath;
+                if (!displayPathMap.TryGetValue(display.Name, out var path))
+                    continue;
 
                 var hdrActive = hdrPaths.Contains(path);
 

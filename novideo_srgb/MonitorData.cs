@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Windows;
+using Microsoft.Win32;
 using EDIDParser;
 using EDIDParser.Descriptors;
 using EDIDParser.Enums;
@@ -106,7 +107,10 @@ namespace novideo_srgb
 
             if (!doClamp) return;
 
+            // Only add this minimal delay when absolutely necessary
             if (_clamped) Thread.Sleep(100);
+            
+            // Apply settings directly to the output without additional processing
             if (UseEdid)
                 Novideo.SetColorSpaceConversion(_output, Colorimetry.RGBToRGB(TargetColorSpace, EdidColorSpace));
             else if (UseIcc)
@@ -188,14 +192,25 @@ namespace novideo_srgb
         {
             try
             {
+                // Mute list rebuilds triggered by our own LUT write
+                SystemEvents.DisplaySettingsChanged -= _viewModel.OnDisplaySettingsChanged;
+
                 var clamped = CanClamp && ClampSdr;
+                
+                // Apply settings directly without locking
                 UpdateClamp(clamped);
                 _clamped = clamped;
+                
                 OnPropertyChanged(nameof(CanClamp));
             }
             catch (Exception e)
             {
                 HandleClampException(e);
+            }
+            finally
+            {
+                // Re‑enable for real display‑change events
+                SystemEvents.DisplaySettingsChanged += _viewModel.OnDisplaySettingsChanged;
             }
         }
 

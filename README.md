@@ -1,5 +1,14 @@
-## [Download latest release](https://github.com/ledoge/novideo_srgb/releases/latest/download/release.zip)
+# About this FORK:
+This is a fork of [ShrimpDuck's novideo_srgb](https://github.com/ShrimpDuck/novideo_srgb) and contains all his fixes and Quality of Life edits, but this also contains [Camelfert's commits](https://github.com/camelfert/novideo_srgb) that prevent displaying an error popup when clamping an HDR monitor.   
 
+***FINALLY no more annoying popups!***
+## [Download it here](https://github.com/red9350/novideo_srgb_errorless/releases/latest/download/release.zip)
+  
+</br>
+</br>
+</br>
+
+## Original README:
 # About
 This tool uses an undocumented NVIDIA API, supported on Fermi and later, to convert colors before sending them to a wide gamut monitor to effectively clamp it to sRGB (alternatively: Display P3, Adobe RGB or BT.2020), based on the chromaticities provided in its EDID. AMD supports this as a hidden setting in their drivers, but NVIDIA doesn't because ???.
 

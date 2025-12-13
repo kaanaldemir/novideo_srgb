@@ -2,7 +2,7 @@
 This is a fork of [ShrimpDuck's novideo_srgb](https://github.com/ShrimpDuck/novideo_srgb) and contains all his fixes and Quality of Life edits, but this also contains [Camelfert's commits](https://github.com/camelfert/novideo_srgb) that prevent displaying an error popup when clamping an HDR monitor.   
 
 ***FINALLY no more annoying popups!***
-## [Download it here](https://github.com/red9350/novideo_srgb_errorless/releases/latest/download/release.zip)
+## [Download it here](https://github.com/red9350/novideo_srgb_errorless/releases)
   
 </br>
 </br>

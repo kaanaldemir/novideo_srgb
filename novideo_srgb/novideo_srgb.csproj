@@ -98,7 +98,11 @@
     <Compile Include="AboutWindow.xaml.cs">
       <DependentUpon>AboutWindow.xaml</DependentUpon>
     </Compile>
+    <Compile Include="ConfigurationStore.cs" />
     <Compile Include="DisplayConfigManager.cs" />
+    <Compile Include="HotkeyWindow.xaml.cs">
+      <DependentUpon>HotkeyWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="LstarEOTF.cs" />
     <Compile Include="Lut16.cs" />
     <Compile Include="DoubleToneCurve.cs" />
@@ -109,6 +113,10 @@
     <Compile Include="SrgbEOTF.cs" />
     <Compile Include="ToneCurve.cs" />
     <Page Include="AboutWindow.xaml" />
+    <Page Include="HotkeyWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="MainWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -130,6 +138,7 @@
   <ItemGroup>
     <Compile Include="Matrix.cs" />
     <Compile Include="ICCMatrixProfile.cs" />
+    <Compile Include="MonitorProfile.cs" />
     <Compile Include="MonitorData.cs" />
     <Compile Include="Novideo.cs" />
     <Compile Include="AdvancedWindow.xaml.cs">

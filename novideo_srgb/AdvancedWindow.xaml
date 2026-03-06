@@ -1,4 +1,4 @@
-﻿<Window x:Class="novideo_srgb.AdvancedWindow"
+<Window x:Class="novideo_srgb.AdvancedWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -24,6 +24,17 @@
         </Style>
     </Window.Resources>
     <StackPanel Margin="6,0,6,6">
+        <GroupBox Header="Profile" Padding="6" Margin="0,0,0,6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock VerticalAlignment="Center" Text="Profile name" />
+                <TextBox Grid.Column="1" Margin="6,0,0,0"
+                         Text="{Binding ProfileName, UpdateSourceTrigger=PropertyChanged}" />
+            </Grid>
+        </GroupBox>
         <GroupBox Header="Calibration" Padding="6">
             <StackPanel>
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
@@ -92,8 +103,8 @@
                                      VerticalAlignment="Center" />
                             <Label Grid.Row="2" Grid.Column="4">y</Label>
                         </Grid>
-                        <TextBlock TextWrapping="Wrap" Visibility="{Binding EdidWarning}" Foreground="Red">Primaries match target – cannot clamp</TextBlock>
-                        <TextBlock TextWrapping="Wrap" Visibility="{Binding HdrWarning}" Foreground="Red">HDR is active – cannot clamp</TextBlock>
+                        <TextBlock TextWrapping="Wrap" Visibility="{Binding EdidWarning}" Foreground="Red">Primaries match target - cannot clamp</TextBlock>
+                        <TextBlock TextWrapping="Wrap" Visibility="{Binding HdrWarning}" Foreground="Red">HDR is active - cannot clamp</TextBlock>
                     </StackPanel>
                 </RadioButton>
                 <RadioButton IsChecked="{Binding UseIcc}" HorizontalContentAlignment="Stretch">
@@ -105,7 +116,7 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBox IsEnabled="False" Grid.Column="0" IsReadOnly="True"
-                                     Text="{Binding ProfileName, Mode=OneWay}" />
+                                     Text="{Binding ProfileFileName, Mode=OneWay}" />
                             <Button Grid.Column="1"
                                     Content="Browse..."
                                     Click="Browse_Click"

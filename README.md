@@ -1,4 +1,16 @@
-## [Download latest release](https://github.com/ledoge/novideo_srgb/releases/latest/download/release.zip)
+## [Download latest release of the fork](https://github.com/kaanaldemir/novideo_srgb/releases/latest/download/release.zip)
+
+# Fork additions
+This fork keeps the upstream novideo_srgb feature set and adds two workflow features on top:
+
+* Three named profiles per monitor, each with its own calibration and dithering settings.
+* A configurable global hotkey that toggles the requested clamp state for all monitors.
+
+Use the numbered buttons in the main window to switch monitor profiles. The active profile is highlighted, the profile name is editable in the Advanced dialog, and the tray menu exposes the same profiles plus an `Off` option for each monitor.
+
+The original upstream project lives at [ledoge/novideo_srgb](https://github.com/ledoge/novideo_srgb).
+
+## [Original upstream release](https://github.com/ledoge/novideo_srgb/releases/latest/download/release.zip)
 
 # About
 This tool uses an undocumented NVIDIA API, supported on Fermi and later, to convert colors before sending them to a wide gamut monitor to effectively clamp it to sRGB (alternatively: Display P3, Adobe RGB or BT.2020), based on the chromaticities provided in its EDID. AMD supports this as a hidden setting in their drivers, but NVIDIA doesn't because ???.

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -9,10 +9,8 @@ namespace novideo_srgb
 {
     public class AdvancedViewModel : INotifyPropertyChanged
     {
-        public event PropertyChangedEventHandler PropertyChanged;
-
-        private MonitorData _monitor;
-
+        private readonly MonitorData _monitor;
+        private string _profileName;
         private int _target;
         private bool _useIcc;
         private string _profilePath;
@@ -21,20 +19,20 @@ namespace novideo_srgb
         private double _customGamma;
         private double _customPercentage;
         private bool _disableOptimization;
-
         private int _ditherState;
         private int _ditherMode;
         private int _ditherBits;
 
         public AdvancedViewModel()
         {
+            _monitor = null;
             throw new NotSupportedException();
         }
 
         public AdvancedViewModel(MonitorData monitor, Novideo.DitherControl dither)
         {
             _monitor = monitor;
-
+            _profileName = monitor.CurrentProfile.DisplayName;
             _target = monitor.Target;
             _useIcc = monitor.UseIcc;
             _profilePath = monitor.ProfilePath;
@@ -43,36 +41,31 @@ namespace novideo_srgb
             _customGamma = monitor.CustomGamma;
             _customPercentage = monitor.CustomPercentage;
             _disableOptimization = monitor.DisableOptimization;
-
             _ditherBits = dither.bits;
             _ditherMode = dither.mode;
             _ditherState = dither.state;
         }
 
-        public void ApplyChanges()
-        {
-            ChangedCalibration |= _monitor.Target != _target;
-            _monitor.Target = _target;
-            ChangedCalibration |= _monitor.UseIcc != _useIcc;
-            _monitor.UseIcc = _useIcc;
-            ChangedCalibration |= _monitor.ProfilePath != _profilePath;
-            _monitor.ProfilePath = _profilePath;
-            ChangedCalibration |= _monitor.CalibrateGamma != _calibrateGamma;
-            _monitor.CalibrateGamma = _calibrateGamma;
-            ChangedCalibration |= _monitor.SelectedGamma != _selectedGamma;
-            _monitor.SelectedGamma = _selectedGamma;
-            ChangedCalibration |= _monitor.CustomGamma != _customGamma;
-            _monitor.CustomGamma = _customGamma;
-            ChangedCalibration |= _monitor.CustomPercentage != _customPercentage;
-            _monitor.CustomPercentage = _customPercentage;
-            ChangedCalibration |= _monitor.DisableOptimization != _disableOptimization;
-            _monitor.DisableOptimization = _disableOptimization;
-        }
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        public bool HasChanges { get; private set; }
 
         public ChromaticityCoordinates Coords => _monitor.Edid.DisplayParameters.ChromaticityCoordinates;
 
+        public string ProfileName
+        {
+            get => _profileName;
+            set
+            {
+                if (value == _profileName) return;
+                _profileName = value;
+                OnPropertyChanged();
+            }
+        }
+
         public bool UseEdid
         {
+            get => !_useIcc;
             set
             {
                 if (!value == _useIcc) return;
@@ -81,11 +74,11 @@ namespace novideo_srgb
                 OnPropertyChanged(nameof(UseIcc));
                 OnPropertyChanged(nameof(EdidWarning));
             }
-            get => !_useIcc;
         }
 
         public bool UseIcc
         {
+            get => _useIcc;
             set
             {
                 if (value == _useIcc) return;
@@ -94,36 +87,36 @@ namespace novideo_srgb
                 OnPropertyChanged(nameof(UseEdid));
                 OnPropertyChanged(nameof(EdidWarning));
             }
-            get => _useIcc;
         }
 
         public string ProfilePath
         {
+            get => _profilePath;
             set
             {
                 if (value == _profilePath) return;
                 _profilePath = value;
                 OnPropertyChanged();
-                OnPropertyChanged(nameof(ProfileName));
+                OnPropertyChanged(nameof(ProfileFileName));
             }
-            get => _profilePath;
         }
 
-        public string ProfileName => Path.GetFileName(ProfilePath);
+        public string ProfileFileName => string.IsNullOrEmpty(ProfilePath) ? "" : Path.GetFileName(ProfilePath);
 
         public bool CalibrateGamma
         {
+            get => _calibrateGamma;
             set
             {
                 if (value == _calibrateGamma) return;
                 _calibrateGamma = value;
                 OnPropertyChanged();
             }
-            get => _calibrateGamma;
         }
 
         public int SelectedGamma
         {
+            get => _selectedGamma;
             set
             {
                 if (value == _selectedGamma) return;
@@ -131,7 +124,6 @@ namespace novideo_srgb
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(UseCustomGamma));
             }
-            get => _selectedGamma;
         }
 
         public Visibility UseCustomGamma =>
@@ -139,17 +131,18 @@ namespace novideo_srgb
 
         public double CustomGamma
         {
+            get => _customGamma;
             set
             {
                 if (value == _customGamma) return;
                 _customGamma = value;
                 OnPropertyChanged();
             }
-            get => _customGamma;
         }
 
         public int Target
         {
+            get => _target;
             set
             {
                 if (value == _target) return;
@@ -157,40 +150,40 @@ namespace novideo_srgb
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(EdidWarning));
             }
-            get => _target;
         }
 
         public Visibility HdrWarning => _monitor.HdrActive ? Visibility.Visible : Visibility.Collapsed;
-        public Visibility EdidWarning => HdrWarning != Visibility.Visible && UseEdid && Colorimetry.ColorSpaces[_target].Equals(_monitor.EdidColorSpace)
+
+        public Visibility EdidWarning => HdrWarning != Visibility.Visible && UseEdid &&
+                                         Colorimetry.ColorSpaces[_target].Equals(_monitor.EdidColorSpace)
             ? Visibility.Visible
             : Visibility.Collapsed;
 
         public double CustomPercentage
         {
+            get => _customPercentage;
             set
             {
                 if (value == _customPercentage) return;
                 _customPercentage = value;
                 OnPropertyChanged();
             }
-            get => _customPercentage;
         }
 
         public bool DisableOptimization
         {
+            get => _disableOptimization;
             set
             {
                 if (value == _disableOptimization) return;
                 _disableOptimization = value;
                 OnPropertyChanged();
             }
-            get => _disableOptimization;
         }
-
-        public bool ChangedCalibration { get; set; }
 
         public int DitherState
         {
+            get => _ditherState;
             set
             {
                 if (value == _ditherState) return;
@@ -199,38 +192,64 @@ namespace novideo_srgb
                 OnPropertyChanged(nameof(CustomDither));
                 OnPropertyChanged(nameof(DitherMode));
                 OnPropertyChanged(nameof(DitherBits));
-                ChangedDither = true;
             }
-            get => _ditherState;
         }
 
         public int DitherMode
         {
+            get => _ditherState == 0 ? -1 : _ditherMode;
             set
             {
                 if (value == _ditherMode) return;
                 _ditherMode = value;
                 OnPropertyChanged();
-                ChangedDither = true;
             }
-            get => _ditherState == 0 ? -1 : _ditherMode;
         }
 
         public int DitherBits
         {
+            get => _ditherState == 0 ? -1 : _ditherBits;
             set
             {
                 if (value == _ditherBits) return;
                 _ditherBits = value;
                 OnPropertyChanged();
-                ChangedDither = true;
             }
-            get => _ditherState == 0 ? -1 : _ditherBits;
         }
 
         public bool CustomDither => DitherState == 1;
 
-        public bool ChangedDither { get; set; }
+        public void ApplyChanges()
+        {
+            var currentProfile = _monitor.CurrentProfile;
+
+            var existingProfileName = currentProfile.DisplayName;
+            currentProfile.Name = _profileName;
+            HasChanges |= existingProfileName != currentProfile.DisplayName;
+
+            HasChanges |= _monitor.Target != _target;
+            _monitor.Target = _target;
+            HasChanges |= _monitor.UseIcc != _useIcc;
+            _monitor.UseIcc = _useIcc;
+            HasChanges |= _monitor.ProfilePath != _profilePath;
+            _monitor.ProfilePath = _profilePath;
+            HasChanges |= _monitor.CalibrateGamma != _calibrateGamma;
+            _monitor.CalibrateGamma = _calibrateGamma;
+            HasChanges |= _monitor.SelectedGamma != _selectedGamma;
+            _monitor.SelectedGamma = _selectedGamma;
+            HasChanges |= _monitor.CustomGamma != _customGamma;
+            _monitor.CustomGamma = _customGamma;
+            HasChanges |= _monitor.CustomPercentage != _customPercentage;
+            _monitor.CustomPercentage = _customPercentage;
+            HasChanges |= _monitor.DisableOptimization != _disableOptimization;
+            _monitor.DisableOptimization = _disableOptimization;
+            HasChanges |= currentProfile.DitherState != _ditherState;
+            currentProfile.DitherState = _ditherState;
+            HasChanges |= currentProfile.DitherMode != _ditherMode;
+            currentProfile.DitherMode = _ditherMode;
+            HasChanges |= currentProfile.DitherBits != _ditherBits;
+            currentProfile.DitherBits = _ditherBits;
+        }
 
         private void OnPropertyChanged([CallerMemberName] string name = null)
         {

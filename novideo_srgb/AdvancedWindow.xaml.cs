@@ -1,11 +1,11 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Controls;
 
 namespace novideo_srgb
 {
     public partial class AdvancedWindow
     {
-        private AdvancedViewModel _viewModel;
+        private readonly AdvancedViewModel _viewModel;
 
         public AdvancedWindow(MonitorData monitor)
         {
@@ -16,6 +16,7 @@ namespace novideo_srgb
                 dither.mode = 4;
                 dither.bits = bitDepth == 8 ? 1 : 2;
             }
+
             _viewModel = new AdvancedViewModel(monitor, dither);
             DataContext = _viewModel;
             InitializeComponent();
@@ -31,11 +32,13 @@ namespace novideo_srgb
             }
         }
 
+        public bool HasChanges => _viewModel.HasChanges;
+
         private static string BrowseProfiles()
         {
             var dlg = new Microsoft.Win32.OpenFileDialog
             {
-                Filter = "ICC Profiles|*.icc;*.icm"
+                Filter = "ICC Profiles|*.icc;*.icm",
             };
 
             var result = dlg.ShowDialog();
@@ -57,8 +60,5 @@ namespace novideo_srgb
             _viewModel.ApplyChanges();
             DialogResult = true;
         }
-
-        public bool ChangedCalibration => _viewModel.ChangedCalibration;
-        public bool ChangedDither => _viewModel.ChangedDither;
     }
 }

@@ -1,10 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Windows.Forms;
-using System.Xml.Linq;
 using Microsoft.Win32;
 using NvAPIWrapper.Display;
 
@@ -12,13 +11,14 @@ namespace novideo_srgb
 {
     public class MainViewModel
     {
-        public ObservableCollection<MonitorData> Monitors { get; }
+        private const uint SupportedHotkeyModifiers = HotkeyWindow.ModAlt | HotkeyWindow.ModControl |
+                                                      HotkeyWindow.ModShift | HotkeyWindow.ModWin;
 
-        private string _configPath;
-
-        private string _startupName;
-        private RegistryKey _startupKey;
-        private string _startupValue;
+        private readonly string _configPath;
+        private readonly string _startupName;
+        private readonly RegistryKey _startupKey;
+        private readonly string _startupValue;
+        private int _displaySettingsSuppressionCount;
 
         public MainViewModel()
         {
@@ -26,12 +26,17 @@ namespace novideo_srgb
             _configPath = AppDomain.CurrentDomain.BaseDirectory + "config.xml";
 
             _startupName = "novideo_srgb";
-            _startupKey = Registry.CurrentUser.OpenSubKey
-                ("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", true);
+            _startupKey = Registry.CurrentUser.CreateSubKey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run");
             _startupValue = Application.ExecutablePath + " -minimize";
 
             UpdateMonitors();
         }
+
+        public ObservableCollection<MonitorData> Monitors { get; }
+
+        public uint HotkeyModifiers { get; set; }
+
+        public uint HotkeyKey { get; set; }
 
         public bool? RunAtStartup
         {
@@ -59,61 +64,18 @@ namespace novideo_srgb
                 }
                 else
                 {
-                    _startupKey.DeleteValue(_startupName);
+                    _startupKey.DeleteValue(_startupName, false);
                 }
-            }
-        }
-
-        private void UpdateMonitors()
-        {
-            Monitors.Clear();
-            List<XElement> config = null;
-            if (File.Exists(_configPath))
-            {
-                config = XElement.Load(_configPath).Descendants("monitor").ToList();
-            }
-
-            var hdrPaths = DisplayConfigManager.GetHdrDisplayPaths();
-
-            var number = 1;
-            foreach (var display in Display.GetDisplays())
-            {
-                var displays = WindowsDisplayAPI.Display.GetDisplays();
-                var path = displays.First(x => x.DisplayName == display.Name).DevicePath;
-
-                var hdrActive = hdrPaths.Contains(path);
-
-                var settings = config?.FirstOrDefault(x => (string)x.Attribute("path") == path);
-                MonitorData monitor;
-                if (settings != null)
-                {
-                    monitor = new MonitorData(this, number++, display, path, hdrActive,
-                        (bool)settings.Attribute("clamp_sdr"),
-                        (bool)settings.Attribute("use_icc"),
-                        (string)settings.Attribute("icc_path"),
-                        (bool)settings.Attribute("calibrate_gamma"),
-                        (int)settings.Attribute("selected_gamma"),
-                        (double)settings.Attribute("custom_gamma"),
-                        (double)settings.Attribute("custom_percentage"),
-                        (int)settings.Attribute("target"),
-                        (bool)settings.Attribute("disable_optimization"));
-                }
-                else
-                {
-                    monitor = new MonitorData(this, number++, display, path, hdrActive, false);
-                }
-
-                Monitors.Add(monitor);
-            }
-
-            foreach (var monitor in Monitors)
-            {
-                monitor.ReapplyClamp();
             }
         }
 
         public void OnDisplaySettingsChanged(object sender, EventArgs e)
         {
+            if (Volatile.Read(ref _displaySettingsSuppressionCount) > 0)
+            {
+                return;
+            }
+
             UpdateMonitors();
         }
 
@@ -123,28 +85,87 @@ namespace novideo_srgb
             OnDisplaySettingsChanged(null, null);
         }
 
+        public IDisposable SuppressDisplaySettingsRefresh()
+        {
+            return new DisplaySettingsRefreshScope(this);
+        }
+
         public void SaveConfig()
         {
             try
             {
-                var xElem = new XElement("monitors",
-                    Monitors.Select(x =>
-                        new XElement("monitor", new XAttribute("path", x.Path),
-                            new XAttribute("clamp_sdr", x.ClampSdr),
-                            new XAttribute("use_icc", x.UseIcc),
-                            new XAttribute("icc_path", x.ProfilePath),
-                            new XAttribute("calibrate_gamma", x.CalibrateGamma),
-                            new XAttribute("selected_gamma", x.SelectedGamma),
-                            new XAttribute("custom_gamma", x.CustomGamma),
-                            new XAttribute("custom_percentage", x.CustomPercentage),
-                            new XAttribute("target", x.Target),
-                            new XAttribute("disable_optimization", x.DisableOptimization))));
-                xElem.Save(_configPath);
+                var configuration = new NovideoConfiguration
+                {
+                    HotkeyModifiers = HotkeyModifiers & SupportedHotkeyModifiers,
+                    HotkeyKey = HotkeyKey,
+                };
+
+                foreach (var monitor in Monitors)
+                {
+                    configuration.Monitors.Add(monitor.ToConfiguration());
+                }
+
+                ConfigurationStore.Save(_configPath, configuration);
             }
             catch (Exception ex)
             {
                 MessageBox.Show(ex.Message + "\n\nTry extracting the program elsewhere.");
                 Environment.Exit(1);
+            }
+        }
+
+        private void UpdateMonitors()
+        {
+            Monitors.Clear();
+
+            var configuration = ConfigurationStore.Load(_configPath);
+            HotkeyModifiers = configuration.HotkeyModifiers & SupportedHotkeyModifiers;
+            HotkeyKey = configuration.HotkeyKey;
+
+            var hdrPaths = DisplayConfigManager.GetHdrDisplayPaths();
+            var monitorConfigurations = configuration.Monitors
+                .Where(x => !string.IsNullOrWhiteSpace(x.Path))
+                .ToDictionary(x => x.Path, x => x);
+            var windowsDisplays = WindowsDisplayAPI.Display.GetDisplays().ToList();
+
+            var number = 1;
+            foreach (var display in Display.GetDisplays())
+            {
+                var windowsDisplay = windowsDisplays.FirstOrDefault(x => x.DisplayName == display.Name);
+                if (windowsDisplay == null)
+                {
+                    continue;
+                }
+
+                var path = windowsDisplay.DevicePath;
+                var hdrActive = hdrPaths.Contains(path);
+
+                MonitorConfiguration monitorConfiguration;
+                monitorConfigurations.TryGetValue(path, out monitorConfiguration);
+
+                var monitor = new MonitorData(this, number++, display, path, hdrActive, monitorConfiguration);
+                Monitors.Add(monitor);
+            }
+
+            foreach (var monitor in Monitors)
+            {
+                monitor.ReapplySettings();
+            }
+        }
+
+        private sealed class DisplaySettingsRefreshScope : IDisposable
+        {
+            private readonly MainViewModel _viewModel;
+
+            public DisplaySettingsRefreshScope(MainViewModel viewModel)
+            {
+                _viewModel = viewModel;
+                Interlocked.Increment(ref _viewModel._displaySettingsSuppressionCount);
+            }
+
+            public void Dispose()
+            {
+                Interlocked.Decrement(ref _viewModel._displaySettingsSuppressionCount);
             }
         }
     }

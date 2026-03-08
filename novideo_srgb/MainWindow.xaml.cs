@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Interop;
@@ -19,8 +20,34 @@ namespace novideo_srgb
     public partial class MainWindow
     {
         private const int WM_HOTKEY = 0x0312;
+        private const int WM_KEYDOWN = 0x0100;
+        private const int WM_KEYUP = 0x0101;
+        private const int WM_SYSKEYDOWN = 0x0104;
+        private const int WM_SYSKEYUP = 0x0105;
         private const int HotkeyId = 9000;
+        private const int WhKeyboardLl = 13;
         private const uint ModNoRepeat = 0x4000;
+        private const int VkLeftControl = 0xA2;
+        private const int VkRightControl = 0xA3;
+        private const int VkLeftMenu = 0xA4;
+        private const int VkRightMenu = 0xA5;
+        private const int VkLeftShift = 0xA0;
+        private const int VkRightShift = 0xA1;
+        private const int VkLeftWin = 0x5B;
+        private const int VkRightWin = 0x5C;
+        private const long HotkeyDuplicateSuppressionTicks = TimeSpan.TicksPerMillisecond * 150;
+
+        private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct KbdLlHookStruct
+        {
+            public uint vkCode;
+            public uint scanCode;
+            public uint flags;
+            public uint time;
+            public IntPtr dwExtraInfo;
+        }
 
         [DllImport("user32.dll")]
         private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
@@ -28,11 +55,31 @@ namespace novideo_srgb
         [DllImport("user32.dll")]
         private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod,
+            uint dwThreadId);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern short GetAsyncKeyState(int vKey);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern IntPtr GetModuleHandle(string lpModuleName);
+
         private readonly MainViewModel _viewModel;
+        private readonly LowLevelKeyboardProc _keyboardHookProc;
         private FormsContextMenu _contextMenu;
         private NotifyIcon _notifyIcon;
         private HwndSource _windowSource;
         private bool _hotkeyRegistered;
+        private IntPtr _keyboardHookHandle;
+        private bool _keyboardHookArmed;
+        private long _lastHotkeyTriggerTicks;
 
         public MainWindow()
         {
@@ -43,6 +90,7 @@ namespace novideo_srgb
                 return;
             }
 
+            _keyboardHookProc = KeyboardHookProc;
             InitializeComponent();
             _viewModel = (MainViewModel)DataContext;
             SystemEvents.DisplaySettingsChanged += _viewModel.OnDisplaySettingsChanged;
@@ -260,11 +308,39 @@ namespace novideo_srgb
         {
             if (msg == WM_HOTKEY && wParam.ToInt32() == HotkeyId)
             {
-                ToggleAllMonitorClamping();
+                HandleHotkeyTrigger();
                 handled = true;
             }
 
             return IntPtr.Zero;
+        }
+
+        private IntPtr KeyboardHookProc(int nCode, IntPtr wParam, IntPtr lParam)
+        {
+            if (nCode >= 0 && _hotkeyRegistered && _viewModel.HotkeyKey != 0)
+            {
+                var message = wParam.ToInt32();
+                var hookData = Marshal.PtrToStructure<KbdLlHookStruct>(lParam);
+
+                if (message == WM_KEYDOWN || message == WM_SYSKEYDOWN)
+                {
+                    if (hookData.vkCode == _viewModel.HotkeyKey && !_keyboardHookArmed &&
+                        AreExactHotkeyModifiersPressed())
+                    {
+                        _keyboardHookArmed = true;
+                        HandleHotkeyTrigger();
+                    }
+                }
+                else if (message == WM_KEYUP || message == WM_SYSKEYUP)
+                {
+                    if (hookData.vkCode == _viewModel.HotkeyKey)
+                    {
+                        _keyboardHookArmed = false;
+                    }
+                }
+            }
+
+            return CallNextHookEx(_keyboardHookHandle, nCode, wParam, lParam);
         }
 
         private void ToggleAllMonitorClamping()
@@ -299,6 +375,10 @@ namespace novideo_srgb
 
             var modifiers = _viewModel.HotkeyModifiers | ModNoRepeat;
             _hotkeyRegistered = RegisterHotKey(handle, HotkeyId, modifiers, _viewModel.HotkeyKey);
+            if (_hotkeyRegistered)
+            {
+                InstallKeyboardHook();
+            }
 
             if (showResultMessage)
             {
@@ -319,6 +399,8 @@ namespace novideo_srgb
 
         private void UnregisterGlobalHotkey()
         {
+            UninstallKeyboardHook();
+
             if (!_hotkeyRegistered)
             {
                 return;
@@ -331,6 +413,102 @@ namespace novideo_srgb
             }
 
             _hotkeyRegistered = false;
+        }
+
+        private void InstallKeyboardHook()
+        {
+            if (_keyboardHookHandle != IntPtr.Zero)
+            {
+                return;
+            }
+
+            _keyboardHookArmed = false;
+
+            var module = Process.GetCurrentProcess().MainModule;
+            var moduleHandle = module == null ? IntPtr.Zero : GetModuleHandle(module.ModuleName);
+            _keyboardHookHandle = SetWindowsHookEx(WhKeyboardLl, _keyboardHookProc, moduleHandle, 0);
+        }
+
+        private void UninstallKeyboardHook()
+        {
+            _keyboardHookArmed = false;
+
+            if (_keyboardHookHandle == IntPtr.Zero)
+            {
+                return;
+            }
+
+            UnhookWindowsHookEx(_keyboardHookHandle);
+            _keyboardHookHandle = IntPtr.Zero;
+        }
+
+        private void HandleHotkeyTrigger()
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(HandleHotkeyTrigger));
+                return;
+            }
+
+            if (!TryClaimHotkeyTrigger())
+            {
+                return;
+            }
+
+            ToggleAllMonitorClamping();
+        }
+
+        private bool TryClaimHotkeyTrigger()
+        {
+            var now = DateTime.UtcNow.Ticks;
+            while (true)
+            {
+                var lastTrigger = Interlocked.Read(ref _lastHotkeyTriggerTicks);
+                if (now - lastTrigger < HotkeyDuplicateSuppressionTicks)
+                {
+                    return false;
+                }
+
+                if (Interlocked.CompareExchange(ref _lastHotkeyTriggerTicks, now, lastTrigger) == lastTrigger)
+                {
+                    return true;
+                }
+            }
+        }
+
+        private bool AreExactHotkeyModifiersPressed()
+        {
+            return IsModifierPressed(HotkeyWindow.ModControl) == HasHotkeyModifier(HotkeyWindow.ModControl) &&
+                   IsModifierPressed(HotkeyWindow.ModAlt) == HasHotkeyModifier(HotkeyWindow.ModAlt) &&
+                   IsModifierPressed(HotkeyWindow.ModShift) == HasHotkeyModifier(HotkeyWindow.ModShift) &&
+                   IsModifierPressed(HotkeyWindow.ModWin) == HasHotkeyModifier(HotkeyWindow.ModWin);
+        }
+
+        private bool HasHotkeyModifier(uint modifier)
+        {
+            return (_viewModel.HotkeyModifiers & modifier) != 0;
+        }
+
+        private static bool IsModifierPressed(uint modifier)
+        {
+            switch (modifier)
+            {
+                case HotkeyWindow.ModControl:
+                    return IsVirtualKeyDown(VkLeftControl) || IsVirtualKeyDown(VkRightControl);
+                case HotkeyWindow.ModAlt:
+                    return IsVirtualKeyDown(VkLeftMenu) || IsVirtualKeyDown(VkRightMenu);
+                case HotkeyWindow.ModShift:
+                    return IsVirtualKeyDown(VkLeftShift) || IsVirtualKeyDown(VkRightShift);
+                case HotkeyWindow.ModWin:
+                    return IsVirtualKeyDown(VkLeftWin) || IsVirtualKeyDown(VkRightWin);
+                default:
+                    return false;
+            }
+        }
+
+        private static bool IsVirtualKeyDown(int virtualKey)
+        {
+            return (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
         }
 
         protected override void OnClosed(EventArgs e)

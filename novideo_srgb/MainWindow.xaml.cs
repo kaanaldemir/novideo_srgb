@@ -80,6 +80,7 @@ namespace novideo_srgb
         private IntPtr _keyboardHookHandle;
         private bool _keyboardHookArmed;
         private long _lastHotkeyTriggerTicks;
+        private readonly bool _startMinimized;
 
         public MainWindow()
         {
@@ -101,8 +102,8 @@ namespace novideo_srgb
 
             if (args.Contains("-minimize"))
             {
+                _startMinimized = true;
                 WindowState = WindowState.Minimized;
-                Hide();
             }
 
             InitializeTrayIcon();
@@ -119,6 +120,11 @@ namespace novideo_srgb
             }
 
             ApplyHotkeyRegistration(false);
+
+            if (_startMinimized)
+            {
+                Dispatcher.BeginInvoke(new Action(() => { Hide(); }));
+            }
         }
 
         protected override void OnStateChanged(EventArgs e)

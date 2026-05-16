@@ -80,6 +80,7 @@ namespace novideo_srgb
         private IntPtr _keyboardHookHandle;
         private bool _keyboardHookArmed;
         private long _lastHotkeyTriggerTicks;
+        private int _ignoreNextRegisteredHotkey;
         private readonly bool _startMinimized;
 
         public MainWindow()
@@ -314,7 +315,11 @@ namespace novideo_srgb
         {
             if (msg == WM_HOTKEY && wParam.ToInt32() == HotkeyId)
             {
-                HandleHotkeyTrigger();
+                if (Interlocked.Exchange(ref _ignoreNextRegisteredHotkey, 0) == 0)
+                {
+                    HandleHotkeyTrigger();
+                }
+
                 handled = true;
             }
 
@@ -334,6 +339,7 @@ namespace novideo_srgb
                         AreExactHotkeyModifiersPressed())
                     {
                         _keyboardHookArmed = true;
+                        Interlocked.Exchange(ref _ignoreNextRegisteredHotkey, 1);
                         HandleHotkeyTrigger();
                     }
                 }
@@ -352,9 +358,12 @@ namespace novideo_srgb
         private void ToggleAllMonitorClamping()
         {
             var enableClamp = !_viewModel.Monitors.Any(x => x.ClampSdr);
-            foreach (var monitor in _viewModel.Monitors)
+            using (_viewModel.SuppressDisplaySettingsRefresh())
             {
-                monitor.SetClampRequested(enableClamp);
+                foreach (var monitor in _viewModel.Monitors)
+                {
+                    monitor.SetClampRequested(enableClamp);
+                }
             }
         }
 
@@ -438,6 +447,7 @@ namespace novideo_srgb
         private void UninstallKeyboardHook()
         {
             _keyboardHookArmed = false;
+            Interlocked.Exchange(ref _ignoreNextRegisteredHotkey, 0);
 
             if (_keyboardHookHandle == IntPtr.Zero)
             {

@@ -4,9 +4,9 @@
 This fork keeps the upstream novideo_srgb feature set and adds two workflow features on top:
 
 * Three named profiles per monitor, each with its own calibration and dithering settings.
-* A configurable global hotkey that toggles the requested clamp state for all monitors.
+* Configurable global hotkeys, either combined for all monitors or separate per monitor.
 
-Use the numbered buttons in the main window to switch monitor profiles. The active profile is highlighted, the profile name is editable in the Advanced dialog, and the tray menu exposes the same profiles plus an `Off` option for each monitor.
+Use the numbered buttons in the main window to switch monitor profiles. The active profile is highlighted, the profile name is editable in the Advanced dialog, and the tray menu exposes the same profiles plus an `Off` option for each monitor. Settings for disconnected or disabled monitors are preserved when the app saves changes for connected monitors.
 
 The original upstream project lives at [ledoge/novideo_srgb](https://github.com/ledoge/novideo_srgb).
 

@@ -18,6 +18,7 @@ namespace novideo_srgb
         private readonly string _startupName;
         private readonly RegistryKey _startupKey;
         private readonly string _startupValue;
+        private readonly Dictionary<string, MonitorConfiguration> _knownMonitorConfigurations;
         private int _displaySettingsSuppressionCount;
 
         public MainViewModel()
@@ -28,6 +29,7 @@ namespace novideo_srgb
             _startupName = "novideo_srgb";
             _startupKey = Registry.CurrentUser.CreateSubKey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run");
             _startupValue = Application.ExecutablePath + " -minimize";
+            _knownMonitorConfigurations = new Dictionary<string, MonitorConfiguration>(StringComparer.OrdinalIgnoreCase);
 
             UpdateMonitors();
         }
@@ -37,6 +39,8 @@ namespace novideo_srgb
         public uint HotkeyModifiers { get; set; }
 
         public uint HotkeyKey { get; set; }
+
+        public bool UseCombinedHotkey { get; set; } = true;
 
         public bool? RunAtStartup
         {
@@ -98,11 +102,24 @@ namespace novideo_srgb
                 {
                     HotkeyModifiers = HotkeyModifiers & SupportedHotkeyModifiers,
                     HotkeyKey = HotkeyKey,
+                    UseCombinedHotkey = UseCombinedHotkey,
                 };
 
                 foreach (var monitor in Monitors)
                 {
-                    configuration.Monitors.Add(monitor.ToConfiguration());
+                    _knownMonitorConfigurations[monitor.Path] = monitor.ToConfiguration();
+                }
+
+                var activePaths = new HashSet<string>(Monitors.Select(x => x.Path), StringComparer.OrdinalIgnoreCase);
+                foreach (var monitor in Monitors)
+                {
+                    configuration.Monitors.Add(_knownMonitorConfigurations[monitor.Path]);
+                }
+
+                foreach (var monitorConfiguration in _knownMonitorConfigurations.Values
+                             .Where(x => !activePaths.Contains(x.Path)))
+                {
+                    configuration.Monitors.Add(monitorConfiguration);
                 }
 
                 ConfigurationStore.Save(_configPath, configuration);
@@ -121,11 +138,14 @@ namespace novideo_srgb
             var configuration = ConfigurationStore.Load(_configPath);
             HotkeyModifiers = configuration.HotkeyModifiers & SupportedHotkeyModifiers;
             HotkeyKey = configuration.HotkeyKey;
+            UseCombinedHotkey = configuration.UseCombinedHotkey;
 
             var hdrPaths = DisplayConfigManager.GetHdrDisplayPaths();
-            var monitorConfigurations = configuration.Monitors
-                .Where(x => !string.IsNullOrWhiteSpace(x.Path))
-                .ToDictionary(x => x.Path, x => x);
+            foreach (var monitorConfiguration in configuration.Monitors.Where(x => !string.IsNullOrWhiteSpace(x.Path)))
+            {
+                _knownMonitorConfigurations[monitorConfiguration.Path] = monitorConfiguration;
+            }
+
             var windowsDisplays = WindowsDisplayAPI.Display.GetDisplays().ToList();
 
             var number = 1;
@@ -141,7 +161,7 @@ namespace novideo_srgb
                 var hdrActive = hdrPaths.Contains(path);
 
                 MonitorConfiguration monitorConfiguration;
-                monitorConfigurations.TryGetValue(path, out monitorConfiguration);
+                _knownMonitorConfigurations.TryGetValue(path, out monitorConfiguration);
 
                 var monitor = new MonitorData(this, number++, display, path, hdrActive, monitorConfiguration);
                 Monitors.Add(monitor);

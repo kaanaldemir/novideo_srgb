@@ -12,6 +12,8 @@ namespace novideo_srgb
 
         public uint HotkeyKey { get; set; }
 
+        public bool UseCombinedHotkey { get; set; } = true;
+
         public List<MonitorConfiguration> Monitors { get; } = new List<MonitorConfiguration>();
     }
 
@@ -22,6 +24,10 @@ namespace novideo_srgb
         public bool ClampSdr { get; set; }
 
         public int SelectedProfileIndex { get; set; }
+
+        public uint HotkeyModifiers { get; set; }
+
+        public uint HotkeyKey { get; set; }
 
         public List<MonitorProfile> Profiles { get; } = new List<MonitorProfile>();
     }
@@ -41,6 +47,7 @@ namespace novideo_srgb
             var root = XElement.Load(path);
             configuration.HotkeyModifiers = ParseUInt(root.Attribute("hotkey_modifiers"), 0);
             configuration.HotkeyKey = ParseUInt(root.Attribute("hotkey_key"), 0);
+            configuration.UseCombinedHotkey = ParseBool(root.Attribute("use_combined_hotkey"), true);
 
             foreach (var monitorElement in root.Elements("monitor"))
             {
@@ -49,6 +56,8 @@ namespace novideo_srgb
                     Path = (string)monitorElement.Attribute("path"),
                     ClampSdr = ParseBool(monitorElement.Attribute("clamp_sdr"), false),
                     SelectedProfileIndex = ParseInt(monitorElement.Attribute("selected_profile"), 0),
+                    HotkeyModifiers = ParseUInt(monitorElement.Attribute("hotkey_modifiers"), 0),
+                    HotkeyKey = ParseUInt(monitorElement.Attribute("hotkey_key"), 0),
                 };
 
                 if (string.IsNullOrWhiteSpace(monitorConfiguration.Path))
@@ -83,6 +92,7 @@ namespace novideo_srgb
             var root = new XElement("monitors",
                 new XAttribute("hotkey_modifiers", configuration.HotkeyModifiers),
                 new XAttribute("hotkey_key", configuration.HotkeyKey),
+                new XAttribute("use_combined_hotkey", configuration.UseCombinedHotkey),
                 configuration.Monitors.Select(CreateMonitorElement));
             root.Save(path);
         }
@@ -99,6 +109,8 @@ namespace novideo_srgb
                 new XAttribute("path", configuration.Path ?? ""),
                 new XAttribute("clamp_sdr", configuration.ClampSdr),
                 new XAttribute("selected_profile", selectedProfileIndex),
+                new XAttribute("hotkey_modifiers", configuration.HotkeyModifiers),
+                new XAttribute("hotkey_key", configuration.HotkeyKey),
                 new XAttribute("use_icc", currentProfile.UseIcc),
                 new XAttribute("icc_path", currentProfile.ProfilePath ?? ""),
                 new XAttribute("calibrate_gamma", currentProfile.CalibrateGamma),

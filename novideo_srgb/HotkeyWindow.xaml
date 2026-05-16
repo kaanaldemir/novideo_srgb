@@ -9,21 +9,29 @@
         SizeToContent="WidthAndHeight"
         WindowStartupLocation="CenterOwner">
     <StackPanel Margin="12">
-        <TextBlock Margin="0,0,0,8" TextWrapping="Wrap">
-            Press the key you want to use, then choose any modifiers.
-        </TextBlock>
+        <CheckBox Name="CombinedHotkeyCheckBox"
+                  Margin="0,0,0,8"
+                  Content="Combined hotkey for all monitors"
+                  Checked="CombinedHotkeyCheckBox_Changed"
+                  Unchecked="CombinedHotkeyCheckBox_Changed" />
+        <ComboBox Name="MonitorComboBox"
+                  Margin="0,0,0,8"
+                  MinWidth="280"
+                  DisplayMemberPath="Name"
+                  SelectionChanged="MonitorComboBox_SelectionChanged" />
+        <TextBlock Name="TargetTextBlock" Margin="0,0,0,8" TextWrapping="Wrap" />
         <TextBox Name="HotkeyTextBox"
                  Margin="0,0,0,8"
-                 MinWidth="240"
+                 MinWidth="280"
                  IsReadOnly="True"
                  VerticalContentAlignment="Center"
                  PreviewKeyDown="HotkeyTextBox_PreviewKeyDown"
                  GotKeyboardFocus="HotkeyTextBox_GotKeyboardFocus" />
         <WrapPanel Margin="0,0,0,12">
-            <CheckBox Name="CtrlCheckBox" Margin="0,0,12,0" Content="Ctrl" />
-            <CheckBox Name="AltCheckBox" Margin="0,0,12,0" Content="Alt" />
-            <CheckBox Name="ShiftCheckBox" Margin="0,0,12,0" Content="Shift" />
-            <CheckBox Name="WinCheckBox" Content="Win" />
+            <CheckBox Name="CtrlCheckBox" Margin="0,0,12,0" Content="Ctrl" Click="ModifierCheckBox_Click" />
+            <CheckBox Name="AltCheckBox" Margin="0,0,12,0" Content="Alt" Click="ModifierCheckBox_Click" />
+            <CheckBox Name="ShiftCheckBox" Margin="0,0,12,0" Content="Shift" Click="ModifierCheckBox_Click" />
+            <CheckBox Name="WinCheckBox" Content="Win" Click="ModifierCheckBox_Click" />
         </WrapPanel>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Width="75" Margin="0,0,6,0" Click="ClearButton_Click">Clear</Button>

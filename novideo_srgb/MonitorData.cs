@@ -54,6 +54,8 @@ namespace novideo_srgb
             InitializeProfiles(configuration);
 
             ClampSdr = configuration != null && configuration.ClampSdr;
+            HotkeyModifiers = configuration != null ? configuration.HotkeyModifiers : 0;
+            HotkeyKey = configuration != null ? configuration.HotkeyKey : 0;
             _selectedProfileIndex = NormalizeProfileIndex(configuration != null ? configuration.SelectedProfileIndex : 0);
             RefreshProfileSelection();
         }
@@ -69,6 +71,10 @@ namespace novideo_srgb
         public string Path { get; }
 
         public bool ClampSdr { get; private set; }
+
+        public uint HotkeyModifiers { get; set; }
+
+        public uint HotkeyKey { get; set; }
 
         public bool HdrActive { get; }
 
@@ -285,6 +291,8 @@ namespace novideo_srgb
                 Path = Path,
                 ClampSdr = ClampSdr,
                 SelectedProfileIndex = _selectedProfileIndex,
+                HotkeyModifiers = HotkeyModifiers,
+                HotkeyKey = HotkeyKey,
             };
 
             foreach (var profile in Profiles)

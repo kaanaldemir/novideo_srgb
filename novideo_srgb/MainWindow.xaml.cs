@@ -1,5 +1,6 @@
 using Microsoft.Win32;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
@@ -25,6 +26,7 @@ namespace novideo_srgb
         private const int WM_SYSKEYDOWN = 0x0104;
         private const int WM_SYSKEYUP = 0x0105;
         private const int HotkeyId = 9000;
+        private const int PerMonitorHotkeyIdBase = 9100;
         private const int WhKeyboardLl = 13;
         private const uint ModNoRepeat = 0x4000;
         private const int VkLeftControl = 0xA2;
@@ -76,11 +78,11 @@ namespace novideo_srgb
         private FormsContextMenu _contextMenu;
         private NotifyIcon _notifyIcon;
         private HwndSource _windowSource;
-        private bool _hotkeyRegistered;
+        private readonly List<RegisteredHotkey> _registeredHotkeys = new List<RegisteredHotkey>();
         private IntPtr _keyboardHookHandle;
-        private bool _keyboardHookArmed;
+        private uint _keyboardHookArmedKey;
         private long _lastHotkeyTriggerTicks;
-        private int _ignoreNextRegisteredHotkey;
+        private int _ignoreNextRegisteredHotkeyId;
         private readonly bool _startMinimized;
 
         public MainWindow()
@@ -95,8 +97,8 @@ namespace novideo_srgb
             _keyboardHookProc = KeyboardHookProc;
             InitializeComponent();
             _viewModel = (MainViewModel)DataContext;
-            SystemEvents.DisplaySettingsChanged += _viewModel.OnDisplaySettingsChanged;
-            SystemEvents.PowerModeChanged += _viewModel.OnPowerModeChanged;
+            SystemEvents.DisplaySettingsChanged += SystemEvents_DisplaySettingsChanged;
+            SystemEvents.PowerModeChanged += SystemEvents_PowerModeChanged;
 
             var args = Environment.GetCommandLineArgs().ToList();
             args.RemoveAt(0);
@@ -138,6 +140,33 @@ namespace novideo_srgb
             base.OnStateChanged(e);
         }
 
+        private void SystemEvents_DisplaySettingsChanged(object sender, EventArgs e)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(() => { SystemEvents_DisplaySettingsChanged(sender, e); }));
+                return;
+            }
+
+            _viewModel.OnDisplaySettingsChanged(sender, e);
+            ApplyHotkeyRegistration(false);
+        }
+
+        private void SystemEvents_PowerModeChanged(object sender, PowerModeChangedEventArgs e)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(new Action(() => { SystemEvents_PowerModeChanged(sender, e); }));
+                return;
+            }
+
+            _viewModel.OnPowerModeChanged(sender, e);
+            if (e.Mode == PowerModes.Resume)
+            {
+                ApplyHotkeyRegistration(false);
+            }
+        }
+
         private void AboutButton_Click(object sender, RoutedEventArgs e)
         {
             var window = new AboutWindow
@@ -149,7 +178,12 @@ namespace novideo_srgb
 
         private void HotkeyButton_Click(object sender, RoutedEventArgs e)
         {
-            var window = new HotkeyWindow(_viewModel.HotkeyModifiers, _viewModel.HotkeyKey)
+            var monitorHotkeys = _viewModel.Monitors
+                .Select(x => new HotkeyWindow.MonitorHotkey(x.Path, x.Number + ". " + x.Name,
+                    x.HotkeyModifiers, x.HotkeyKey))
+                .ToList();
+            var window = new HotkeyWindow(_viewModel.UseCombinedHotkey, _viewModel.HotkeyModifiers,
+                _viewModel.HotkeyKey, monitorHotkeys)
             {
                 Owner = this,
             };
@@ -159,8 +193,22 @@ namespace novideo_srgb
                 return;
             }
 
+            _viewModel.UseCombinedHotkey = window.UseCombinedHotkey;
             _viewModel.HotkeyModifiers = window.HotkeyModifiers;
             _viewModel.HotkeyKey = window.HotkeyKey;
+
+            foreach (var monitorHotkey in window.MonitorHotkeys)
+            {
+                var monitor = _viewModel.Monitors.FirstOrDefault(x => x.Path == monitorHotkey.Path);
+                if (monitor == null)
+                {
+                    continue;
+                }
+
+                monitor.HotkeyModifiers = monitorHotkey.HotkeyModifiers;
+                monitor.HotkeyKey = monitorHotkey.HotkeyKey;
+            }
+
             _viewModel.SaveConfig();
             ApplyHotkeyRegistration(true);
         }
@@ -313,14 +361,18 @@ namespace novideo_srgb
 
         private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
-            if (msg == WM_HOTKEY && wParam.ToInt32() == HotkeyId)
+            if (msg == WM_HOTKEY)
             {
-                if (Interlocked.Exchange(ref _ignoreNextRegisteredHotkey, 0) == 0)
+                var hotkeyId = wParam.ToInt32();
+                if (_registeredHotkeys.Any(x => x.Id == hotkeyId))
                 {
-                    HandleHotkeyTrigger();
-                }
+                    if (Interlocked.Exchange(ref _ignoreNextRegisteredHotkeyId, 0) != hotkeyId)
+                    {
+                        HandleHotkeyTrigger(hotkeyId);
+                    }
 
-                handled = true;
+                    handled = true;
+                }
             }
 
             return IntPtr.Zero;
@@ -328,26 +380,29 @@ namespace novideo_srgb
 
         private IntPtr KeyboardHookProc(int nCode, IntPtr wParam, IntPtr lParam)
         {
-            if (nCode >= 0 && _hotkeyRegistered && _viewModel.HotkeyKey != 0)
+            if (nCode >= 0 && _registeredHotkeys.Count > 0)
             {
                 var message = wParam.ToInt32();
                 var hookData = Marshal.PtrToStructure<KbdLlHookStruct>(lParam);
 
                 if (message == WM_KEYDOWN || message == WM_SYSKEYDOWN)
                 {
-                    if (hookData.vkCode == _viewModel.HotkeyKey && !_keyboardHookArmed &&
-                        AreExactHotkeyModifiersPressed())
+                    var hotkey = _keyboardHookArmedKey == 0
+                        ? _registeredHotkeys.FirstOrDefault(x =>
+                            x.Key == hookData.vkCode && AreExactHotkeyModifiersPressed(x.Modifiers))
+                        : null;
+                    if (hotkey != null)
                     {
-                        _keyboardHookArmed = true;
-                        Interlocked.Exchange(ref _ignoreNextRegisteredHotkey, 1);
-                        HandleHotkeyTrigger();
+                        _keyboardHookArmedKey = hookData.vkCode;
+                        Interlocked.Exchange(ref _ignoreNextRegisteredHotkeyId, hotkey.Id);
+                        HandleHotkeyTrigger(hotkey.Id);
                     }
                 }
                 else if (message == WM_KEYUP || message == WM_SYSKEYUP)
                 {
-                    if (hookData.vkCode == _viewModel.HotkeyKey)
+                    if (hookData.vkCode == _keyboardHookArmedKey)
                     {
-                        _keyboardHookArmed = false;
+                        _keyboardHookArmedKey = 0;
                     }
                 }
             }
@@ -367,15 +422,29 @@ namespace novideo_srgb
             }
         }
 
+        private void ToggleMonitorClamping(MonitorData monitor)
+        {
+            if (monitor == null)
+            {
+                return;
+            }
+
+            using (_viewModel.SuppressDisplaySettingsRefresh())
+            {
+                monitor.SetClampRequested(!monitor.ClampSdr);
+            }
+        }
+
         private bool ApplyHotkeyRegistration(bool showResultMessage)
         {
             UnregisterGlobalHotkey();
 
-            if (_viewModel.HotkeyKey == 0)
+            var hotkeys = BuildHotkeyRegistrations();
+            if (hotkeys.Count == 0)
             {
                 if (showResultMessage)
                 {
-                    MessageBox.Show("Global hotkey cleared.", "Novideo sRGB", MessageBoxButtons.OK,
+                    MessageBox.Show("Global hotkeys cleared.", "Novideo sRGB", MessageBoxButtons.OK,
                         MessageBoxIcon.Information);
                 }
 
@@ -388,35 +457,74 @@ namespace novideo_srgb
                 return false;
             }
 
-            var modifiers = _viewModel.HotkeyModifiers | ModNoRepeat;
-            _hotkeyRegistered = RegisterHotKey(handle, HotkeyId, modifiers, _viewModel.HotkeyKey);
-            if (_hotkeyRegistered)
+            var failedHotkeys = new List<RegisteredHotkey>();
+            foreach (var hotkey in hotkeys)
+            {
+                var modifiers = hotkey.Modifiers | ModNoRepeat;
+                if (RegisterHotKey(handle, hotkey.Id, modifiers, hotkey.Key))
+                {
+                    _registeredHotkeys.Add(hotkey);
+                    continue;
+                }
+
+                failedHotkeys.Add(hotkey);
+            }
+
+            if (_registeredHotkeys.Count > 0)
             {
                 InstallKeyboardHook();
             }
 
             if (showResultMessage)
             {
-                if (_hotkeyRegistered)
+                if (failedHotkeys.Count == 0)
                 {
-                    MessageBox.Show("Global hotkey registered.", "Novideo sRGB", MessageBoxButtons.OK,
+                    MessageBox.Show("Global hotkeys registered.", "Novideo sRGB", MessageBoxButtons.OK,
                         MessageBoxIcon.Information);
                 }
                 else
                 {
-                    MessageBox.Show("The selected hotkey could not be registered. It may already be in use.",
+                    MessageBox.Show("One or more selected hotkeys could not be registered. They may already be in use.",
                         "Novideo sRGB", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
 
-            return _hotkeyRegistered;
+            return failedHotkeys.Count == 0;
+        }
+
+        private List<RegisteredHotkey> BuildHotkeyRegistrations()
+        {
+            if (_viewModel.UseCombinedHotkey)
+            {
+                return _viewModel.HotkeyKey == 0
+                    ? new List<RegisteredHotkey>()
+                    : new List<RegisteredHotkey>
+                    {
+                        new RegisteredHotkey(HotkeyId, _viewModel.HotkeyModifiers, _viewModel.HotkeyKey, null),
+                    };
+            }
+
+            var hotkeys = new List<RegisteredHotkey>();
+            for (var i = 0; i < _viewModel.Monitors.Count; i++)
+            {
+                var monitor = _viewModel.Monitors[i];
+                if (monitor.HotkeyKey == 0)
+                {
+                    continue;
+                }
+
+                hotkeys.Add(new RegisteredHotkey(PerMonitorHotkeyIdBase + i, monitor.HotkeyModifiers,
+                    monitor.HotkeyKey, monitor));
+            }
+
+            return hotkeys;
         }
 
         private void UnregisterGlobalHotkey()
         {
             UninstallKeyboardHook();
 
-            if (!_hotkeyRegistered)
+            if (_registeredHotkeys.Count == 0)
             {
                 return;
             }
@@ -424,10 +532,13 @@ namespace novideo_srgb
             var handle = new WindowInteropHelper(this).Handle;
             if (handle != IntPtr.Zero)
             {
-                UnregisterHotKey(handle, HotkeyId);
+                foreach (var hotkey in _registeredHotkeys)
+                {
+                    UnregisterHotKey(handle, hotkey.Id);
+                }
             }
 
-            _hotkeyRegistered = false;
+            _registeredHotkeys.Clear();
         }
 
         private void InstallKeyboardHook()
@@ -437,7 +548,7 @@ namespace novideo_srgb
                 return;
             }
 
-            _keyboardHookArmed = false;
+            _keyboardHookArmedKey = 0;
 
             var module = Process.GetCurrentProcess().MainModule;
             var moduleHandle = module == null ? IntPtr.Zero : GetModuleHandle(module.ModuleName);
@@ -446,8 +557,8 @@ namespace novideo_srgb
 
         private void UninstallKeyboardHook()
         {
-            _keyboardHookArmed = false;
-            Interlocked.Exchange(ref _ignoreNextRegisteredHotkey, 0);
+            _keyboardHookArmedKey = 0;
+            Interlocked.Exchange(ref _ignoreNextRegisteredHotkeyId, 0);
 
             if (_keyboardHookHandle == IntPtr.Zero)
             {
@@ -458,11 +569,11 @@ namespace novideo_srgb
             _keyboardHookHandle = IntPtr.Zero;
         }
 
-        private void HandleHotkeyTrigger()
+        private void HandleHotkeyTrigger(int hotkeyId)
         {
             if (!Dispatcher.CheckAccess())
             {
-                Dispatcher.BeginInvoke(new Action(HandleHotkeyTrigger));
+                Dispatcher.BeginInvoke(new Action(() => { HandleHotkeyTrigger(hotkeyId); }));
                 return;
             }
 
@@ -471,7 +582,20 @@ namespace novideo_srgb
                 return;
             }
 
-            ToggleAllMonitorClamping();
+            var hotkey = _registeredHotkeys.FirstOrDefault(x => x.Id == hotkeyId);
+            if (hotkey == null)
+            {
+                return;
+            }
+
+            if (hotkey.Monitor == null)
+            {
+                ToggleAllMonitorClamping();
+            }
+            else
+            {
+                ToggleMonitorClamping(hotkey.Monitor);
+            }
         }
 
         private bool TryClaimHotkeyTrigger()
@@ -492,17 +616,17 @@ namespace novideo_srgb
             }
         }
 
-        private bool AreExactHotkeyModifiersPressed()
+        private static bool AreExactHotkeyModifiersPressed(uint modifiers)
         {
-            return IsModifierPressed(HotkeyWindow.ModControl) == HasHotkeyModifier(HotkeyWindow.ModControl) &&
-                   IsModifierPressed(HotkeyWindow.ModAlt) == HasHotkeyModifier(HotkeyWindow.ModAlt) &&
-                   IsModifierPressed(HotkeyWindow.ModShift) == HasHotkeyModifier(HotkeyWindow.ModShift) &&
-                   IsModifierPressed(HotkeyWindow.ModWin) == HasHotkeyModifier(HotkeyWindow.ModWin);
+            return IsModifierPressed(HotkeyWindow.ModControl) == HasHotkeyModifier(modifiers, HotkeyWindow.ModControl) &&
+                   IsModifierPressed(HotkeyWindow.ModAlt) == HasHotkeyModifier(modifiers, HotkeyWindow.ModAlt) &&
+                   IsModifierPressed(HotkeyWindow.ModShift) == HasHotkeyModifier(modifiers, HotkeyWindow.ModShift) &&
+                   IsModifierPressed(HotkeyWindow.ModWin) == HasHotkeyModifier(modifiers, HotkeyWindow.ModWin);
         }
 
-        private bool HasHotkeyModifier(uint modifier)
+        private static bool HasHotkeyModifier(uint modifiers, uint modifier)
         {
-            return (_viewModel.HotkeyModifiers & modifier) != 0;
+            return (modifiers & modifier) != 0;
         }
 
         private static bool IsModifierPressed(uint modifier)
@@ -527,10 +651,29 @@ namespace novideo_srgb
             return (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
         }
 
+        private sealed class RegisteredHotkey
+        {
+            public RegisteredHotkey(int id, uint modifiers, uint key, MonitorData monitor)
+            {
+                Id = id;
+                Modifiers = modifiers;
+                Key = key;
+                Monitor = monitor;
+            }
+
+            public int Id { get; }
+
+            public uint Modifiers { get; }
+
+            public uint Key { get; }
+
+            public MonitorData Monitor { get; }
+        }
+
         protected override void OnClosed(EventArgs e)
         {
-            SystemEvents.DisplaySettingsChanged -= _viewModel.OnDisplaySettingsChanged;
-            SystemEvents.PowerModeChanged -= _viewModel.OnPowerModeChanged;
+            SystemEvents.DisplaySettingsChanged -= SystemEvents_DisplaySettingsChanged;
+            SystemEvents.PowerModeChanged -= SystemEvents_PowerModeChanged;
             UnregisterGlobalHotkey();
 
             if (_windowSource != null)
